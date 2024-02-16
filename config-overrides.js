@@ -29,4 +29,13 @@ module.exports = {
     config.optimization.minimizer[0].parallel = false;
     return config;
   },
+  webpack:(config, env)=>{
+    config.module.rules.push({
+      test: /\.mjs$/,
+      include: /node_modules/,
+      type: "javascript/auto"
+    });
+    return config;
+
+  }
 };

@@ -67,6 +67,8 @@ import { RedirectExternal } from 'components/RedirectExternal/RedirectExternal';
 import NotFound404Page from 'pages/NotFound404Page';
 import { Environment, HypeLab, HypeLabContext } from 'hypelab-react';
 import { ArcxAnalyticsProvider } from '@arcxmoney/analytics';
+import { SDKPage } from 'pages/sdkPage';
+import { OrderlyConfigProvider } from '@orderly.network/hooks';
 
 const ThemeProvider: React.FC<{ children: any }> = ({ children }) => {
   const theme = mainTheme;
@@ -243,6 +245,14 @@ const App: React.FC = () => {
                       <PageLayout>
                         <CalculatorPage />
                       </PageLayout>
+                    </Route>
+                    <Route exact path='/sdk'>
+                      <OrderlyConfigProvider
+                        networkId='testnet'
+                        brokerId='orderly'
+                      >
+                        <SDKPage />
+                      </OrderlyConfigProvider>
                     </Route>
                     <Route path='*'>
                       <PageLayout>
