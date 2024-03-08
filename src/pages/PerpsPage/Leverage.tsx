@@ -1,7 +1,18 @@
-import React, { FC, useEffect, useMemo, useState } from 'react';
+import React, { FC, useEffect, useMemo, useState }, { FC, useMemo, useState, useEffect } from 'react';
 import { Box, Button, Flex, Text, Container, Switch } from '@radix-ui/themes';
 import Arrow from '../../assets/images/downward.svg';
 import { CropSquareOutlined } from '@material-ui/icons';
+import { useActiveWeb3React } from 'hooks';
+import AssetModal from '../../components/AssetModal';
+import AccountModal from '../../components/AccountModal';
+import { AccountStatusEnum } from '@orderly.network/types';
+import {
+  useAccount,
+  useChains,
+  useCollateral,
+  useDeposit,
+  useWithdraw,
+} from '@orderly.network/hooks';
 import { useActiveWeb3React, useGetConnection } from '../../hooks';
 import { useSelectedWallet } from '../../state/user/hooks';
 import {
@@ -11,6 +22,63 @@ import {
   useDeposit,
 } from '@orderly.network/hooks';
 export const Leverage: React.FC<{ perpToken?: string }> = ({ perpToken }) => {
+  enum ModalType {
+    Deposit = 'deposit',
+    Withdraw = 'withdraw',
+  }
+  const [assetModalOpen, setAssetModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<ModalType>(ModalType.Deposit);
+  const openModal = (type: ModalType) => {
+    setModalType(type);
+    setAssetModalOpen(true);
+  };
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const openAccountModal = () => {
+    setAccountModalOpen(true);
+  };
+  const { account, state } = useAccount();
+  const { account: quickSwapAccount, library, chainId } = useActiveWeb3React();
+  useEffect(() => {
+    if (!library || !quickSwapAccount) return;
+    account.setAddress(quickSwapAccount, {
+      provider: library,
+      chain: {
+        id: chainId,
+      },
+    });
+  }, [library, account]);
+
+  const collateral = useCollateral();
+  const [chains, { findByChainId }] = useChains('mainnet');
+  const token = useMemo(() => {
+    return Array.isArray(chains) ? chains[0].token_infos[0] : undefined;
+  }, [chains]);
+  const [amount, setAmount] = useState<string | undefined>();
+  const {
+    dst,
+    balance,
+    allowance,
+    approve,
+    deposit,
+    isNativeToken,
+    balanceRevalidating,
+    fetchBalance,
+  } = useDeposit({
+    address: token?.address,
+    decimals: token?.decimals,
+    srcToken: token?.symbol,
+    srcChainId: Number(chainId),
+  });
+  const showConnectWalletButton = () => {
+    return (
+      state.status === AccountStatusEnum.NotSignedIn ||
+      state.status === AccountStatusEnum.DisabledTrading
+    );
+  };
+  console.log('address', token?.address);
+  console.log('decimals', token?.decimals);
+  console.log('srcToken', token?.symbol);
+
   const [tokenSymbol, setTokenSymbol] = useState<string | undefined>();
   const [orderType, setOrderType] = useState<string | undefined>('limit');
   const { account: quickSwapAccount, library, chainId } = useActiveWeb3React();
@@ -71,6 +139,7 @@ export const Leverage: React.FC<{ perpToken?: string }> = ({ perpToken }) => {
             <Button
               variant='outline'
               style={{ color: '#448aff', borderColor: '#448aff' }}
+              onClick={() => openModal(ModalType.Deposit)}
             >
               Manage
             </Button>
@@ -171,7 +240,7 @@ export const Leverage: React.FC<{ perpToken?: string }> = ({ perpToken }) => {
           align='center'
           style={{ cursor: 'pointer' }}
         >
-          <Box
+          <button
             style={{
               width: 149,
               height: 36,
@@ -186,11 +255,21 @@ export const Leverage: React.FC<{ perpToken?: string }> = ({ perpToken }) => {
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+            onClick={async () => {
+              if (amount == null) return;
+              if (Number(allowance) < Number(amount)) {
+                await approve(amount.toString());
+              } else {
+                await deposit();
+              }
             }}
           >
             Buy/Long
-          </Box>
-          <Box
+          </button>
+          <button
             style={{
               width: 149,
               height: 36,
@@ -205,10 +284,12 @@ export const Leverage: React.FC<{ perpToken?: string }> = ({ perpToken }) => {
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
+              border: 'none',
+              cursor: 'pointer',
             }}
           >
             Sell/Short
-          </Box>
+          </button>
         </Flex>
         <Flex
           direction='row'
@@ -221,7 +302,9 @@ export const Leverage: React.FC<{ perpToken?: string }> = ({ perpToken }) => {
             fontSize: '12px',
           }}
         >
-          <Text style={{ color: ' #61657a' }}>Available 0.00 USDC</Text>
+          <Text style={{ color: ' #61657a' }}>
+            Available {collateral.availableBalance} USDC
+          </Text>
           <Text style={{ color: '#448aff' }}>Deposit</Text>
         </Flex>
         <Flex
@@ -464,20 +547,32 @@ export const Leverage: React.FC<{ perpToken?: string }> = ({ perpToken }) => {
           </Text>
           <img src={Arrow} width='16' height='16' />
         </Flex>
-        <Button
-          style={{
-            width: 300,
-            height: 40,
-            margin: '16px 15px',
-            padding: '11px 100px 12px',
-            borderRadius: '8px',
-            backgroundColor: '#448aff',
-            cursor: 'pointer',
-          }}
-        >
-          Connect Wallet
-        </Button>
+        {showConnectWalletButton() && (
+          <Button
+            onClick={() => openAccountModal()}
+            style={{
+              width: 300,
+              height: 40,
+              margin: '16px 15px',
+              padding: '11px 10px 12px',
+              borderRadius: '8px',
+              backgroundColor: '#448aff',
+              cursor: 'pointer',
+            }}
+          >
+            Connect Wallet
+          </Button>
+        )}
       </Box>
+      <AssetModal
+        open={assetModalOpen}
+        onClose={() => setAssetModalOpen(false)}
+        modalType={modalType}
+      />
+      <AccountModal
+        open={accountModalOpen}
+        onClose={() => setAccountModalOpen(false)}
+      />
     </Flex>
   );
 };
